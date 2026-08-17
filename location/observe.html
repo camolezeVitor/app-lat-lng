@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<title>Observe - Tracking em tempo real</title>
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  #panel {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    width: 300px;
+  }
+  #panel label { font-weight: bold; display: block; margin-top: 8px; font-size: 13px; }
+  #panel select, #panel textarea, #panel button {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+  }
+  #panel textarea { height: 80px; font-family: monospace; font-size: 11px; }
+  #panel button { padding: 6px; cursor: pointer; }
+  #status { font-size: 12px; color: green; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <strong>Observe - Tracking</strong>
+
+  <label>Histórico (últimos...)</label>
+  <select id="rangeSelect">
+    <option value="">-- selecione --</option>
+    <option value="30">30 min</option>
+    <option value="40">40 min</option>
+    <option value="50">50 min</option>
+    <option value="60">1 hora</option>
+    <option value="120">2 horas</option>
+  </select>
+
+  <label>Área de restrição (GeoJSON Polygon coordinates)</label>
+  <textarea id="polygonInput" placeholder='Ex: [[[-47.9,-22.0],[-47.8,-22.0],[-47.8,-21.9],[-47.9,-21.9],[-47.9,-22.0]]]'></textarea>
+  <button id="applyPolygon">Aplicar área de restrição</button>
+
+  <div id="status">Conectando ao SSE...</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      osm: {
+        type: 'raster',
+        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '&copy; OpenStreetMap contributors'
+      }
+    },
+    layers: [
+      { id: 'osm', type: 'raster', source: 'osm' }
+    ]
+  },
+  center: [-47.9, -22.0],
+  zoom: 12
+});
+
+let restrictionPolygon = null; // turf polygon
+const markers = [];
+
+function isOutside(lat, lng) {
+  if (!restrictionPolygon) return false;
+  const pt = turf.point([lng, lat]);
+  return !turf.booleanPointInPolygon(pt, restrictionPolygon);
+}
+
+function addPoint(lat, lng) {
+  const outside = isOutside(lat, lng);
+  const marker = new maplibregl.Marker({ color: outside ? 'red' : 'green' })
+    .setLngLat([lng, lat])
+    .addTo(map);
+  markers.push(marker);
+}
+
+function clearMarkers() {
+  markers.forEach(m => m.remove());
+  markers.length = 0;
+}
+
+function recolorAll() {
+  // recria todos os marcadores recalculando dentro/fora do polígono
+  const points = markers.map(m => m.getLngLat());
+  clearMarkers();
+  points.forEach(p => addPoint(p.lat, p.lng));
+}
+
+// ---------- Polígono de restrição ----------
+document.getElementById('applyPolygon').addEventListener('click', () => {
+  const raw = document.getElementById('polygonInput').value.trim();
+  if (!raw) {
+    restrictionPolygon = null;
+    if (map.getLayer('restriction-fill')) {
+      map.removeLayer('restriction-fill');
+      map.removeLayer('restriction-line');
+      map.removeSource('restriction');
+    }
+    recolorAll();
+    return;
+  }
+
+  try {
+    const coords = JSON.parse(raw);
+    restrictionPolygon = turf.polygon(coords);
+
+    const geojson = { type: 'Feature', geometry: restrictionPolygon.geometry, properties: {} };
+
+    if (map.getSource('restriction')) {
+      map.getSource('restriction').setData(geojson);
+    } else {
+      map.addSource('restriction', { type: 'geojson', data: geojson });
+      map.addLayer({
+        id: 'restriction-fill',
+        type: 'fill',
+        source: 'restriction',
+        paint: { 'fill-color': '#0000ff', 'fill-opacity': 0.1 }
+      });
+      map.addLayer({
+        id: 'restriction-line',
+        type: 'line',
+        source: 'restriction',
+        paint: { 'line-color': '#0000ff', 'line-width': 2 }
+      });
+    }
+
+    recolorAll();
+  } catch (e) {
+    alert('GeoJSON inválido: ' + e.message);
+  }
+});
+
+// ---------- Histórico (select de tempo) ----------
+document.getElementById('rangeSelect').addEventListener('change', async (e) => {
+  const minutes = e.target.value;
+  if (!minutes) return;
+
+  const end = new Date();
+  const init = new Date(end.getTime() - minutes * 60 * 1000);
+
+  const res = await fetch(`/track?init=${init.toISOString()}&end=${end.toISOString()}`);
+  const data = await res.json();
+
+  clearMarkers();
+  data.forEach(loc => addPoint(loc.latitude, loc.longitude));
+
+  if (data.length > 0) {
+    const last = data[data.length - 1];
+    map.flyTo({ center: [last.longitude, last.latitude], zoom: 14 });
+  }
+});
+
+// ---------- SSE tempo real ----------
+const source = new EventSource('/location_now');
+
+source.onopen = () => {
+  document.getElementById('status').innerText = 'Conectado - recebendo em tempo real';
+};
+
+source.onerror = () => {
+  document.getElementById('status').innerText = 'Conexão perdida, tentando reconectar...';
+  document.getElementById('status').style.color = 'red';
+};
+
+source.onmessage = (event) => {
+  const location = JSON.parse(event.data);
+  addPoint(location.latitude, location.longitude);
+  map.flyTo({ center: [location.longitude, location.latitude] });
+};
+</script>
+
+</body>
+</html>
