@@ -1,21 +1,27 @@
 # ---- Build ----
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
+
+RUN apk add --no-cache python3 make g++
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 # ---- Run ----
-FROM node:20-alpine
+FROM node:22-alpine
+
+RUN apk add --no-cache python3 make g++
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --omit=dev
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
 
