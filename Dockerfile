@@ -24,6 +24,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
+COPY location ./location
 
 EXPOSE 6767
 
