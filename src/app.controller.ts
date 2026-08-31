@@ -16,9 +16,9 @@ export class AppController {
   }
 
   @Post('location')
-  create(@Body() body: { latitude: number; longitude: number }) {
+  create(@Body() body: { lat: number; lon: number }) {
     console.log(body);
-    return this.locationService.create(body.latitude, body.longitude);
+    return this.locationService.create(Number(body.lat), Number(body.lon));
   }
 
   @Get('track')
