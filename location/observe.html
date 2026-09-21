@@ -2,8 +2,14 @@
 <html lang="pt-br" class="h-full antialiased">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Observe - Tracking em tempo real</title>
+
+  <style>
+    .car-marker { --car: #10b981; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
+    .car-marker .car-body { fill: var(--car); transition: fill .3s; }
+    .car-marker svg { display: block; }
+  </style>
   
   <!-- MapLibre & Turf -->
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
@@ -47,36 +53,11 @@
 <body class="h-full m-0 bg-background text-foreground overflow-hidden">
 
   <!-- Painel -->
-  <div id="panel" class="absolute z-10 w-full bottom-0 md:bottom-auto md:top-4 md:left-4 md:w-[320px] bg-background border-t md:border border-border shadow-md p-5 flex flex-col gap-5 max-h-[50vh] md:max-h-[calc(100vh-2rem)] overflow-y-auto rounded-none">
+  <div id="panel" style="padding-bottom: max(1rem, env(safe-area-inset-bottom));" class="absolute z-10 w-full bottom-0 md:bottom-auto md:top-4 md:left-4 md:w-[320px] bg-background border-t md:border border-border shadow-md px-4 pt-4 md:p-5 flex flex-col gap-4 max-h-[60dvh] md:max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-none">
 
-    <div class="space-y-1.5">
-      <label class="text-sm font-medium leading-none">Histórico (últimos...)</label>
-      <select id="rangeSelect" class="flex h-9 w-full rounded-none border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-        <option value="">-- selecione --</option>
-        <option value="30">30 min</option>
-        <option value="40">40 min</option>
-        <option value="50">50 min</option>
-        <option value="60">1 hora</option>
-        <option value="120">2 horas</option>
-      </select>
-    </div>
-
-    <div class="space-y-1.5">
-      <label class="text-sm font-medium leading-none">Área de restrição</label>
-      <textarea id="polygonInput" placeholder='GeoJSON Polygon\nEx: [[[-47.9,-22.0],[-47.8,-22.0],...]]' class="flex min-h-[80px] w-full rounded-none border border-input bg-transparent px-3 py-2 text-xs font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"></textarea>
-      <button id="applyPolygon" class="inline-flex items-center justify-center rounded-none text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-9 px-4 py-2 w-full">
-        Aplicar área
-      </button>
-    </div>
-
-    <hr class="border-border" />
-
-    <div class="space-y-3">
-      <button id="enableSound" class="inline-flex items-center justify-center rounded-none text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background shadow-sm hover:bg-muted hover:text-foreground h-9 px-4 py-2 w-full">
-        Ativar som (clique uma vez)
-      </button>
-      
-      <div class="flex flex-col gap-1.5">
+    <!-- Status: sempre visível, mesmo com o painel recolhido no celular -->
+    <div class="flex items-center gap-3">
+      <div class="flex-1 flex flex-col gap-1.5">
         <div class="text-sm flex justify-between">
           <span class="font-medium text-muted-foreground">Alarme:</span>
           <span id="alarmStatus" class="font-bold text-muted-foreground">inativo</span>
@@ -86,6 +67,38 @@
           <span id="status" class="font-bold text-emerald-600">Conectando...</span>
         </div>
       </div>
+      <button id="panelToggle" type="button" aria-expanded="false" aria-controls="panelBody" class="md:hidden inline-flex items-center justify-center border border-input bg-background shadow-sm hover:bg-muted h-11 px-4 text-sm font-medium rounded-none">
+        Opções
+      </button>
+    </div>
+
+    <!-- Controles: recolhidos por padrão no celular, sempre abertos no desktop -->
+    <div id="panelBody" class="hidden md:flex flex-col gap-4">
+      <hr class="border-border" />
+
+      <div class="space-y-1.5">
+        <label for="rangeSelect" class="text-sm font-medium leading-none">Histórico (últimos...)</label>
+        <select id="rangeSelect" class="flex h-11 md:h-9 w-full rounded-none border border-input bg-transparent px-3 py-1 text-base md:text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <option value="">-- selecione --</option>
+          <option value="30">30 min</option>
+          <option value="40">40 min</option>
+          <option value="50">50 min</option>
+          <option value="60">1 hora</option>
+          <option value="120">2 horas</option>
+        </select>
+      </div>
+
+      <div class="space-y-1.5">
+        <label for="polygonInput" class="text-sm font-medium leading-none">Área de restrição</label>
+        <textarea id="polygonInput" placeholder='GeoJSON Polygon&#10;Ex: [[[-47.9,-22.0],[-47.8,-22.0],...]]' class="flex min-h-[80px] w-full rounded-none border border-input bg-transparent px-3 py-2 text-base md:text-xs font-mono shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y"></textarea>
+        <button id="applyPolygon" class="inline-flex items-center justify-center rounded-none text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground shadow hover:bg-primary/90 h-11 md:h-9 px-4 py-2 w-full">
+          Aplicar área
+        </button>
+      </div>
+
+      <button id="enableSound" class="inline-flex items-center justify-center rounded-none text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background shadow-sm hover:bg-muted hover:text-foreground h-11 md:h-9 px-4 py-2 w-full">
+        Ativar som (clique uma vez)
+      </button>
     </div>
   </div>
 
@@ -113,32 +126,185 @@ const map = new maplibregl.Map({
   zoom: 12
 });
 
+const COLOR_OK = '#10b981';
+const COLOR_OUT = '#ef4444';
+
 let restrictionPolygon = null;
-const markers = [];
+const points = [];          // { lat, lng, outside }
+let mapReady = false;
+
+// --- Painel (recolher/expandir no celular) ---
+const panelEl = document.getElementById('panel');
+const panelBody = document.getElementById('panelBody');
+const panelToggle = document.getElementById('panelToggle');
+panelToggle.addEventListener('click', () => {
+  const open = panelBody.classList.toggle('hidden') === false;
+  panelToggle.setAttribute('aria-expanded', String(open));
+  panelToggle.innerText = open ? 'Fechar' : 'Opções';
+});
+
+// Espaço ocupado pelo painel, para o carro não ficar escondido atrás dele
+function mapPadding() {
+  if (window.matchMedia('(min-width: 768px)').matches) {
+    return { top: 0, bottom: 0, left: panelEl.offsetWidth + 32, right: 0 };
+  }
+  return { top: 0, bottom: panelEl.offsetHeight, left: 0, right: 0 };
+}
+
+// --- Carrinho ---
+const carEl = document.createElement('div');
+carEl.className = 'car-marker';
+carEl.innerHTML = `
+  <svg viewBox="0 0 28 48" width="28" height="48" xmlns="http://www.w3.org/2000/svg" aria-label="Veículo">
+    <rect x="1" y="9"  width="5" height="10" rx="2" fill="#111827"/>
+    <rect x="22" y="9" width="5" height="10" rx="2" fill="#111827"/>
+    <rect x="1" y="30" width="5" height="10" rx="2" fill="#111827"/>
+    <rect x="22" y="30" width="5" height="10" rx="2" fill="#111827"/>
+    <rect class="car-body" x="4" y="2" width="20" height="44" rx="9" stroke="#fff" stroke-width="2"/>
+    <path d="M8 17 Q14 12 20 17 L19 23 H9 Z" fill="#1f2937"/>
+    <rect x="9" y="25" width="10" height="9" rx="2" fill="rgba(255,255,255,.35)"/>
+    <path d="M9 39 H19 L20 36 H8 Z" fill="#1f2937"/>
+    <circle cx="8.5" cy="4.5" r="1.4" fill="#fde68a"/>
+    <circle cx="19.5" cy="4.5" r="1.4" fill="#fde68a"/>
+  </svg>`;
+
+const carMarker = new maplibregl.Marker({
+  element: carEl,
+  rotationAlignment: 'map',
+  pitchAlignment: 'map'
+});
+let carPos = null;      // posição atualmente exibida [lng, lat]
+let carAnim = null;
+
+function setCarColor(outside) {
+  carEl.style.setProperty('--car', outside ? COLOR_OUT : COLOR_OK);
+}
+
+// Move o carro (com deslize suave quando animate = true) e gira na direção do movimento
+function moveCar(lat, lng, outside, animate) {
+  const to = [lng, lat];
+  setCarColor(outside);
+  if (carAnim) cancelAnimationFrame(carAnim);
+
+  if (carPos && turf.distance(carPos, to, { units: 'meters' }) > 1) {
+    carMarker.setRotation(turf.bearing(carPos, to));
+  }
+
+  if (!carPos) carMarker.setLngLat(to).addTo(map);
+
+  if (!animate || !carPos) {
+    carPos = to;
+    carMarker.setLngLat(to);
+    return;
+  }
+
+  const from = carPos;
+  const start = performance.now();
+  const duration = 900;
+  const step = (now) => {
+    const t = Math.min((now - start) / duration, 1);
+    carPos = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t];
+    carMarker.setLngLat(carPos);
+    carAnim = t < 1 ? requestAnimationFrame(step) : null;
+  };
+  carAnim = requestAnimationFrame(step);
+}
+
+// --- Rastro e pontos ---
+function trailData() {
+  // um segmento por par de pontos, colorido conforme o ponto de chegada
+  const features = [];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    features.push({
+      type: 'Feature',
+      properties: { outside: b.outside },
+      geometry: { type: 'LineString', coordinates: [[a.lng, a.lat], [b.lng, b.lat]] }
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+function pointsData() {
+  return {
+    type: 'FeatureCollection',
+    features: points.map(p => ({
+      type: 'Feature',
+      properties: { outside: p.outside },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] }
+    }))
+  };
+}
+
+function renderTrail() {
+  if (!mapReady) return;
+  map.getSource('trail').setData(trailData());
+  map.getSource('points').setData(pointsData());
+}
+
+map.on('load', () => {
+  const colorExpr = ['case', ['get', 'outside'], COLOR_OUT, COLOR_OK];
+
+  map.addSource('trail', { type: 'geojson', data: trailData() });
+  map.addSource('points', { type: 'geojson', data: pointsData() });
+
+  map.addLayer({
+    id: 'trail-casing',
+    type: 'line',
+    source: 'trail',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ffffff', 'line-width': 8, 'line-opacity': 0.9 }
+  });
+  map.addLayer({
+    id: 'trail-line',
+    type: 'line',
+    source: 'trail',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': colorExpr, 'line-width': 4 }
+  });
+  map.addLayer({
+    id: 'trail-points',
+    type: 'circle',
+    source: 'points',
+    paint: {
+      'circle-radius': 4,
+      'circle-color': colorExpr,
+      'circle-stroke-color': '#ffffff',
+      'circle-stroke-width': 1.5
+    }
+  });
+
+  mapReady = true;
+  renderTrail();
+});
+
+function addPoint(lat, lng, { animate = false } = {}) {
+  const outside = isOutside(lat, lng);
+  points.push({ lat, lng, outside });
+  renderTrail();
+  moveCar(lat, lng, outside, animate);
+}
+
+function clearPoints() {
+  points.length = 0;
+  if (carAnim) cancelAnimationFrame(carAnim);
+  carAnim = null;
+  carPos = null;
+  carMarker.remove();
+  renderTrail();
+}
+
+function recolorAll() {
+  points.forEach(p => { p.outside = isOutside(p.lat, p.lng); });
+  renderTrail();
+  const last = points[points.length - 1];
+  if (last) setCarColor(last.outside);
+}
 
 function isOutside(lat, lng) {
   if (!restrictionPolygon) return false;
   const pt = turf.point([lng, lat]);
   return !turf.booleanPointInPolygon(pt, restrictionPolygon);
-}
-
-function addPoint(lat, lng) {
-  const outside = isOutside(lat, lng);
-  const marker = new maplibregl.Marker({ color: outside ? '#ef4444' : '#10b981' })
-    .setLngLat([lng, lat])
-    .addTo(map);
-  markers.push(marker);
-}
-
-function clearMarkers() {
-  markers.forEach(m => m.remove());
-  markers.length = 0;
-}
-
-function recolorAll() {
-  const points = markers.map(m => m.getLngLat());
-  clearMarkers();
-  points.forEach(p => addPoint(p.lat, p.lng));
 }
 
 document.getElementById('applyPolygon').addEventListener('click', () => {
@@ -195,20 +361,20 @@ document.getElementById('applyPolygon').addEventListener('click', () => {
         type: 'fill',
         source: 'restriction',
         paint: { 'fill-color': '#0000ff', 'fill-opacity': 0.1 }
-      });
+      }, 'trail-casing');
       map.addLayer({
         id: 'restriction-line',
         type: 'line',
         source: 'restriction',
         paint: { 'line-color': '#0000ff', 'line-width': 2 }
-      });
+      }, 'trail-casing');
     }
 
     recolorAll();
     // após aplicar, checar último ponto atual (se houver) para disparar alarme
-    if (markers.length > 0) {
-      const last = markers[markers.length - 1].getLngLat();
-      if (isOutside(last.lat, last.lng)) startAlarm(); else stopAlarm();
+    if (points.length > 0) {
+      const last = points[points.length - 1];
+      if (last.outside) startAlarm(); else stopAlarm();
     } else {
       stopAlarm();
     }
@@ -224,15 +390,31 @@ document.getElementById('rangeSelect').addEventListener('change', async (e) => {
   const end = new Date();
   const init = new Date(end.getTime() - minutes * 60 * 1000);
 
-  const res = await fetch(`/track?init=${init.toISOString()}&end=${end.toISOString()}`);
-  const data = await res.json();
+  let data;
+  try {
+    const res = await fetch(`/track?init=${init.toISOString()}&end=${end.toISOString()}`);
+    if (!res.ok) throw new Error(res.status);
+    data = await res.json();
+  } catch (err) {
+    alert('Não foi possível carregar o histórico: ' + err.message);
+    return;
+  }
 
-  clearMarkers();
+  clearPoints();
   data.forEach(loc => addPoint(loc.latitude, loc.longitude));
 
   if (data.length > 0) {
-    const last = data[data.length - 1];
-    map.flyTo({ center: [last.longitude, last.latitude], zoom: 14 });
+    // enquadra todo o percurso no espaço livre do mapa
+    const bounds = new maplibregl.LngLatBounds();
+    data.forEach(loc => bounds.extend([loc.longitude, loc.latitude]));
+    map.fitBounds(bounds, {
+      padding: {
+        top: 60, right: 60,
+        bottom: 60 + mapPadding().bottom,
+        left: 60 + mapPadding().left
+      },
+      maxZoom: 16
+    });
   }
   checkLastForAlarm(data);
 });
@@ -253,8 +435,8 @@ source.onerror = () => {
 
 source.onmessage = (event) => {
   const location = JSON.parse(event.data);
-  addPoint(location.latitude, location.longitude);
-  map.flyTo({ center: [location.longitude, location.latitude] });
+  addPoint(location.latitude, location.longitude, { animate: true });
+  map.easeTo({ center: [location.longitude, location.latitude], duration: 900, padding: mapPadding() });
   
   if (restrictionPolygon && isOutside(location.latitude, location.longitude)) {
     startAlarm();
